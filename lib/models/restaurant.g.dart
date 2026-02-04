@@ -21,13 +21,16 @@ class RestaurantAdapter extends TypeAdapter<Restaurant> {
       district: fields[1] as String,
       name: fields[2] as String,
       memo: fields[3] as String,
+      lat: fields[4] as double?,
+      lng: fields[5] as double?,
+      mapUrl: fields[6] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, Restaurant obj) {
     writer
-      ..writeByte(4)
+      ..writeByte(7)
       ..writeByte(0)
       ..write(obj.region)
       ..writeByte(1)
@@ -35,7 +38,13 @@ class RestaurantAdapter extends TypeAdapter<Restaurant> {
       ..writeByte(2)
       ..write(obj.name)
       ..writeByte(3)
-      ..write(obj.memo);
+      ..write(obj.memo)
+      ..writeByte(4)
+      ..write(obj.lat)
+      ..writeByte(5)
+      ..write(obj.lng)
+      ..writeByte(6)
+      ..write(obj.mapUrl);
   }
 
   @override
