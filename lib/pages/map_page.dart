@@ -9,50 +9,37 @@ class MapPage extends StatefulWidget {
 }
 
 class _MapPageState extends State<MapPage> {
-  NaverMapController? _controller;
+  late NaverMapController _controller;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('지도')),
-      body: Stack(
-        children: [
-          NaverMap(
+      body: SafeArea(
+        child: SizedBox(
+          width: double.infinity,
+          height: double.infinity,
+          child: NaverMap(
             options: const NaverMapViewOptions(
               initialCameraPosition: NCameraPosition(
-                target: NLatLng(37.5665, 126.9780), // 서울시청 근처
-                zoom: 12,
+                target: NLatLng(37.5665, 126.9780), // 서울시청
+                zoom: 14,
               ),
+              mapType: NMapType.basic,
+              indoorEnable: false,
+              locationButtonEnable: false,
             ),
             onMapReady: (controller) async {
               _controller = controller;
 
-              // ✅ 더미 마커 1개 (지도 뜨는지 확인용)
+              // 테스트 마커
               final marker = NMarker(
-                id: 'dummy',
+                id: 'test',
                 position: const NLatLng(37.5665, 126.9780),
               );
-              await controller.addOverlay(marker);
+              await _controller.addOverlay(marker);
             },
           ),
-
-          // ✅ 안내 문구 (지도 위에 겹쳐서 보여주기)
-          Positioned(
-            left: 12,
-            right: 12,
-            top: 12,
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.9),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Text(
-                '1단계: 지도는 무조건 보이게!\n(지금은 더미 마커 1개 찍어둠)',
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
