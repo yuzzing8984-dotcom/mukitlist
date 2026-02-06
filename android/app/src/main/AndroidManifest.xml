@@ -11,7 +11,10 @@
         <!-- ✅ Naver Map Client ID -->
         <meta-data
             android:name="com.naver.maps.map.CLIENT_ID"
-            android:value="yr19czbsky" />
+            android:value="jikqnnfd9q" />
+        <meta-data
+            android:name="com.naver.maps.map.NCP_KEY_ID"
+            android:value="jikqnnfd9q" />
 
         <!-- Flutter default theme meta (있어도 되고 없어도 되는데 넣는게 안전) -->
         <meta-data
