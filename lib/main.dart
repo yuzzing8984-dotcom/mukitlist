@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart';
 
+import 'pages/home_page.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -19,16 +21,8 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const MaterialApp(
-      home: Scaffold(
-        body: NaverMap(
-          options: NaverMapViewOptions(
-            initialCameraPosition: NCameraPosition(
-              target: NLatLng(37.5665, 126.9780),
-              zoom: 14,
-            ),
-          ),
-        ),
-      ),
+      debugShowCheckedModeBanner: false,
+      home: HomePage(), // ⭐ 여기 핵심
     );
   }
 }

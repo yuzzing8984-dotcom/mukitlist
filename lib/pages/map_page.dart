@@ -9,36 +9,41 @@ class MapPage extends StatefulWidget {
 }
 
 class _MapPageState extends State<MapPage> {
-  late NaverMapController _controller;
+  NaverMapController? _controller;
+
+  final NMarker _testMarker = NMarker(
+    id: 'test_marker',
+    position: const NLatLng(37.5665, 126.9780),
+  );
+
+  bool _markerAdded = false;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: SizedBox(
-          width: double.infinity,
-          height: double.infinity,
-          child: NaverMap(
-            options: const NaverMapViewOptions(
-              initialCameraPosition: NCameraPosition(
-                target: NLatLng(37.5665, 126.9780), // 서울시청
-                zoom: 14,
-              ),
-              mapType: NMapType.basic,
-              indoorEnable: false,
-              locationButtonEnable: false,
+    return ClipRect(
+      child: SizedBox.expand(
+        child: NaverMap(
+          options: const NaverMapViewOptions(
+            initialCameraPosition: NCameraPosition(
+              target: NLatLng(37.5665, 126.9780),
+              zoom: 14,
             ),
-            onMapReady: (controller) async {
-              _controller = controller;
-
-              // 테스트 마커
-              final marker = NMarker(
-                id: 'test',
-                position: const NLatLng(37.5665, 126.9780),
-              );
-              await _controller.addOverlay(marker);
-            },
           ),
+          onMapReady: (controller) async {
+            _controller = controller;
+
+            // hot reload / rebuild 시 중복 추가 방지
+            if (!_markerAdded) {
+              _markerAdded = true;
+              await _controller!.addOverlay(_testMarker);
+
+              _testMarker.setOnTapListener((overlay) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('테스트 마커 클릭됨!')),
+                );
+              });
+            }
+          },
         ),
       ),
     );
