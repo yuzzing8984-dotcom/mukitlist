@@ -4,10 +4,13 @@ import 'package:flutter_naver_map/flutter_naver_map.dart';
 
 import 'models/restaurant.dart';
 import 'pages/home_page.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  await dotenv.load(fileName: ".env");
   await Hive.initFlutter();
   if (!Hive.isAdapterRegistered(0)) {
     Hive.registerAdapter(RestaurantAdapter());
@@ -20,7 +23,7 @@ Future<void> main() async {
     },
   );
 
-  runApp(const MyApp());
+    runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {

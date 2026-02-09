@@ -12,16 +12,33 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int _index = 0;
+  dynamic _selectedRestaurantKeyFromList;
 
-  final _pages = const [
-    MapPage(),
-    RegionListPage(),
-  ];
+  void _onSelectRestaurantKey(dynamic key) {
+    setState(() {
+      _selectedRestaurantKeyFromList = key;
+      _index = 0; // ✅ 지도 탭으로 이동
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _pages[_index],
+      body: IndexedStack(
+        index: _index,
+        children: [
+          MapPage(
+            selectedKeyFromList: _selectedRestaurantKeyFromList,
+            onConsumedSelectedKey: () {
+              // ✅ 같은 key로 계속 재선택되는 것 방지
+              setState(() => _selectedRestaurantKeyFromList = null);
+            },
+          ),
+          RegionListPage(
+            onSelectRestaurantKey: _onSelectRestaurantKey,
+          ),
+        ],
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _index,
         onTap: (i) => setState(() => _index = i),
