@@ -6,8 +6,7 @@ import '../services/naver_local_search.dart';
 import '../services/naver_coord.dart';
 
 class AddRestaurantPage extends StatefulWidget {
-  final String region;
-  const AddRestaurantPage({super.key, required this.region});
+  const AddRestaurantPage({super.key});
 
   @override
   State<AddRestaurantPage> createState() => _AddRestaurantPageState();
@@ -16,10 +15,22 @@ class AddRestaurantPage extends StatefulWidget {
 class _AddRestaurantPageState extends State<AddRestaurantPage> {
   final _formKey = GlobalKey<FormState>();
 
+  double? _pickedLat;
+  double? _pickedLng;
+
+  // ✅ 지역(페이지에서 선택) - 기본값 "미지정"
+  static const List<String> _regions = [
+    '미지정',
+    '서울', '부산', '대구', '인천', '광주', '대전', '울산',
+    '제주', '강원', '경기', '충북', '충남', '전북', '전남', '경북', '경남',
+  ];
+  String _selectedRegion = '미지정';
+
   final _nameCtrl = TextEditingController();
-  final _districtCtrl = TextEditingController();
+  final _districtCtrl = TextEditingController(); // ✅ 주소
   final _memoCtrl = TextEditingController();
 
+  // ✅ UI에 안 보여도 좌표 저장용으로 유지
   final _latCtrl = TextEditingController();
   final _lngCtrl = TextEditingController();
   final _mapUrlCtrl = TextEditingController();
@@ -28,7 +39,6 @@ class _AddRestaurantPageState extends State<AddRestaurantPage> {
   bool _searching = false;
   String? _searchError;
   List<NaverLocalItem> _results = [];
-
 
   late final NaverLocalSearchService _naver;
 
@@ -53,16 +63,38 @@ class _AddRestaurantPageState extends State<AddRestaurantPage> {
     super.dispose();
   }
 
+  bool _isValidLatLng(double lat, double lng) {
+    if (lat.abs() > 90 || lng.abs() > 180) return false;
+    if (lat == 0 || lng == 0) return false; // ✅ 0,0은 화면 밖/잘못된 값 방지
+    return true;
+  }
+
   void _save() {
     if (!_formKey.currentState!.validate()) return;
 
-    final lat = double.tryParse(_latCtrl.text.trim());
-    final lng = double.tryParse(_lngCtrl.text.trim());
+    // ❌ 이 두 줄은 삭제
+    // final lat = double.tryParse(_latCtrl.text.trim());
+    // final lng = double.tryParse(_lngCtrl.text.trim());
+
+    // ✅ 이걸로 교체
+    final lat = _pickedLat;
+    final lng = _pickedLng;
+
+    // ✅ 좌표 없거나 잘못된 값이면 저장 막기
+    if (lat == null || lng == null || !_isValidLatLng(lat, lng)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('검색 결과를 선택해야 지도에 핀이 표시돼요'),
+        ),
+      );
+      return;
+    }
+
     final mapUrl = _mapUrlCtrl.text.trim();
 
     final restaurant = Restaurant(
-      region: widget.region,
-      district: _districtCtrl.text.trim(),
+      region: _selectedRegion,
+      district: _districtCtrl.text.trim(), // ✅ 주소 전체
       name: _nameCtrl.text.trim(),
       memo: _memoCtrl.text.trim(),
       lat: lat,
@@ -96,28 +128,25 @@ class _AddRestaurantPageState extends State<AddRestaurantPage> {
     }
   }
 
-  String _pickDistrict(String address) {
-    // 아주 간단한 “구/동” 추출 시도
-    // 예: "서울특별시 마포구 월드컵로 26 ..." -> "마포구"
-    final parts = address.split(' ');
-    for (final p in parts) {
-      if (p.endsWith('구') || p.endsWith('군') || p.endsWith('시')) return p;
-    }
-    // 못 찾으면 주소 그대로 넣지 말고 빈칸 유지(사용자가 입력)
-    return '';
-  }
-
   void _applySearchResult(NaverLocalItem item) {
     final name = item.cleanTitle;
     final addr = item.roadAddress.isNotEmpty ? item.roadAddress : item.address;
 
     _nameCtrl.text = name;
-
     _districtCtrl.text = addr;
-
 
     if (item.link.isNotEmpty) {
       _mapUrlCtrl.text = item.link;
+    }
+
+    // ✅ 여기 중요:
+    // naver_local_search.dart에서 현재 item.lat/item.lng는 mapy/mapx(TM128) 파싱값임.
+    // 파싱 실패하면 0이 들어올 수 있으니 여기서 한번 더 방어.
+    if (item.lat == 0 || item.lng == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('좌표를 가져오지 못했어요. 다른 결과를 선택해줘!')),
+      );
+      return;
     }
 
     final converted = NaverCoord.toLatLng(item.lng, item.lat);
@@ -125,36 +154,28 @@ class _AddRestaurantPageState extends State<AddRestaurantPage> {
     _lngCtrl.text = converted.lng.toStringAsFixed(6);
 
     setState(() {
+      _pickedLat = converted.lat;
+      _pickedLng = converted.lng;
       _results = [];
       _searchError = null;
     });
-    _searchCtrl.clear(); // (원하면) 검색어도 지움
-    FocusScope.of(context).unfocus(); // 키보드 닫기
 
+    _searchCtrl.clear();
     FocusScope.of(context).unfocus();
   }
 
   @override
   Widget build(BuildContext context) {
-    final subtitle = widget.region;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('맛집 추가'),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(24),
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Text(
-              subtitle,
-              style: const TextStyle(color: Colors.black54),
-            ),
-          ),
-        ),
         actions: [
           TextButton(
             onPressed: _save,
-            child: const Text('저장', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text(
+              '저장',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -164,12 +185,27 @@ class _AddRestaurantPageState extends State<AddRestaurantPage> {
           key: _formKey,
           child: ListView(
             children: [
+              // ✅ 지역 선택
+              DropdownButtonFormField<String>(
+                value: _selectedRegion,
+                items: _regions
+                    .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                    .toList(),
+                onChanged: (v) {
+                  if (v == null) return;
+                  setState(() => _selectedRegion = v);
+                },
+                decoration: const InputDecoration(labelText: '지역'),
+              ),
+
+              const SizedBox(height: 16),
+
               // ✅ 검색
               TextFormField(
                 controller: _searchCtrl,
                 decoration: InputDecoration(
                   labelText: '맛집 검색 (네이버)',
-                  hintText: '예: 을밀대 마포',
+                  hintText: '가게 이름을 검색해봐',
                   suffixIcon: IconButton(
                     icon: const Icon(Icons.search),
                     onPressed: _searching ? null : _search,
@@ -178,6 +214,7 @@ class _AddRestaurantPageState extends State<AddRestaurantPage> {
                 textInputAction: TextInputAction.search,
                 onFieldSubmitted: (_) => _searching ? null : _search(),
               ),
+
               const SizedBox(height: 8),
               if (_searching) const LinearProgressIndicator(),
               if (_searchError != null) ...[
@@ -198,12 +235,18 @@ class _AddRestaurantPageState extends State<AddRestaurantPage> {
                     separatorBuilder: (_, __) => const Divider(height: 1),
                     itemBuilder: (context, index) {
                       final item = _results[index];
-                      final addr = item.roadAddress.isNotEmpty ? item.roadAddress : item.address;
+                      final addr = item.roadAddress.isNotEmpty
+                          ? item.roadAddress
+                          : item.address;
 
                       return ListTile(
                         dense: true,
                         title: Text(item.cleanTitle),
-                        subtitle: Text(addr, maxLines: 2, overflow: TextOverflow.ellipsis),
+                        subtitle: Text(
+                          addr,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                         onTap: () => _applySearchResult(item),
                       );
                     },
@@ -219,23 +262,24 @@ class _AddRestaurantPageState extends State<AddRestaurantPage> {
               TextFormField(
                 controller: _nameCtrl,
                 decoration: const InputDecoration(labelText: '맛집 이름'),
-                validator: (v) => (v == null || v.trim().isEmpty) ? '맛집 이름을 입력해줘' : null,
+                validator: (v) => (v == null || v.trim().isEmpty)
+                    ? '맛집 이름을 입력해줘'
+                    : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _districtCtrl,
-                decoration: const InputDecoration(labelText: '동네/구'),
-                validator: (v) => (v == null || v.trim().isEmpty) ? '동네/구를 입력해줘' : null,
+                decoration: const InputDecoration(labelText: '주소'),
+                validator: (v) => (v == null || v.trim().isEmpty)
+                    ? '주소를 입력해줘'
+                    : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _memoCtrl,
-                decoration: const InputDecoration(labelText: '메모 (선택)'),
+                decoration: const InputDecoration(labelText: '메모'),
                 maxLines: 3,
               ),
-
-              const SizedBox(height: 16),
-              const Divider(height: 1),
 
               const SizedBox(height: 20),
               SizedBox(

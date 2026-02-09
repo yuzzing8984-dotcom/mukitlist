@@ -2,12 +2,14 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class NaverLocalItem {
-  final String title;        // HTML <b> 태그 포함
+  final String title;
   final String roadAddress;
   final String address;
   final String link;
-  final double lat;          // 위도
-  final double lng;          // 경도
+
+  // 네이버 local api의 mapx/mapy (TM128 가능)
+  final double lat;
+  final double lng;
 
   NaverLocalItem({
     required this.title,
@@ -50,33 +52,36 @@ class NaverLocalSearchService {
     );
 
     if (res.statusCode != 200) {
-      throw Exception('Naver search failed: ${res.statusCode} ${res.body}');
+      throw Exception('Naver search failed: ${res.statusCode}');
     }
 
     final data = jsonDecode(res.body) as Map<String, dynamic>;
     final items = (data['items'] as List).cast<Map<String, dynamic>>();
 
-    return items.map((e) {
-      // 네이버 local api의 mapx/mapy는 보통 TM128 좌표로 내려오는 케이스가 많아서
-      // 1) 이 값이 위경도인지 확실하지 않으면, 일단 "좌표 변환"이 필요할 수 있음.
-      // 2) 그런데 어떤 경우엔 위경도처럼 보이는 값이 오기도 해서,
-      //    우선은 '좌표는 나중에 확정'하고, 지금은 결과 파싱부터 붙여두자.
-      //
-      // ✅ 우선 파싱: 숫자 형태만 잡아두고,
-      // AddRestaurantPage에서 "좌표 변환 필요 여부"를 확인해줄게.
-      final mapx = (e['mapx'] ?? '').toString();
-      final mapy = (e['mapy'] ?? '').toString();
+    final result = <NaverLocalItem>[];
 
-      double safeParse(String v) => double.tryParse(v) ?? 0;
+    for (final e in items) {
+      final mapxStr = (e['mapx'] ?? '').toString();
+      final mapyStr = (e['mapy'] ?? '').toString();
 
-      return NaverLocalItem(
-        title: (e['title'] ?? '').toString(),
-        roadAddress: (e['roadAddress'] ?? '').toString(),
-        address: (e['address'] ?? '').toString(),
-        link: (e['link'] ?? '').toString(),
-        lng: safeParse(mapx),
-        lat: safeParse(mapy),
+      final x = double.tryParse(mapxStr);
+      final y = double.tryParse(mapyStr);
+
+      // 좌표 없거나 이상하면 스킵
+      if (x == null || y == null || x == 0 || y == 0) continue;
+
+      result.add(
+        NaverLocalItem(
+          title: (e['title'] ?? '').toString(),
+          roadAddress: (e['roadAddress'] ?? '').toString(),
+          address: (e['address'] ?? '').toString(),
+          link: (e['link'] ?? '').toString(),
+          lng: x, // TM128 X
+          lat: y, // TM128 Y
+        ),
       );
-    }).toList();
+    }
+
+    return result;
   }
 }

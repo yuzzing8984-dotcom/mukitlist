@@ -33,9 +33,9 @@ class MapPageState extends State<MapPage> {
 
   // ✅ 마커 아이콘(기본/선택) - 경로 통일
   final NOverlayImage _iconDefault =
-  NOverlayImage.fromAssetImage('assets/marker/marker_food.png');
+  NOverlayImage.fromAssetImage('assets/markers/marker_food.png');
   final NOverlayImage _iconSelected =
-  NOverlayImage.fromAssetImage('assets/marker/marker_food_selected.png');
+  NOverlayImage.fromAssetImage('assets/markers/marker_food_selected.png');
 
   // ✅ 애니메이션(선택 핀만 살짝 팝)
   double _selectedScale = 1.0;
@@ -149,7 +149,7 @@ class MapPageState extends State<MapPage> {
   Future<void> _focusRestaurant(Restaurant r) async {
     final c = _controller;
     if (c == null) return;
-    if (r.lat == null || r.lng == null) return;
+    if (r.lat == null || r.lng == null) return null;
 
     final z = _currentZoom ?? 12.0;
     final keepOrMin = z < 14.0 ? 14.0 : z;
@@ -227,12 +227,16 @@ class MapPageState extends State<MapPage> {
   // =========================
 
   NMarker _buildMarker({required dynamic key, required Restaurant r}) {
+    debugPrint('MARKER ${r.name} lat=${r.lat} lng=${r.lng}'); // ✅ 정답
+
     final marker = NMarker(
       id: 'r_$key',
       position: NLatLng(r.lat!, r.lng!),
       icon: _markerIcon(key),
       size: _markerSize(key),
     );
+
+    marker.setAnchor(const NPoint(0.5, 0.85));
 
     marker.setZIndex(_markerZIndex(key));
 
@@ -338,20 +342,28 @@ class MapPageState extends State<MapPage> {
   // Detail / Delete
   // =========================
 
-  Future<void> _openDetail(Restaurant r) async {
+  Future<void> _openDetail(dynamic key, Restaurant r) async {
     final deleted = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (_) => RestaurantDetailPage(restaurant: r),
+        builder: (_) => RestaurantDetailPage(
+          hiveKey: key,
+          restaurant: r,
+        ),
       ),
     );
 
-    if (deleted != true) return;
-
-    // 상세에서 삭제가 실제로 발생했으면 selection 해제
-    await _clearSelectionOptimized();
-    await _syncMarkers();
+    if (deleted == true) {
+      if (!mounted) return;
+      setState(() {
+        _selectedRestaurant = null;
+        _selectedKey = null;
+        _selectedScale = 1.0;
+      });
+      await _syncMarkers();
+    }
   }
+
 
   // =========================
   // UI
@@ -454,7 +466,7 @@ class MapPageState extends State<MapPage> {
               child: _RestaurantBottomSheet(
                 restaurant: _selectedRestaurant!,
                 onClose: _clearSelectionOptimized,
-                onDetail: () => _openDetail(_selectedRestaurant!),
+                onDetail: () => _openDetail(_selectedKey, _selectedRestaurant!),
               ),
             ),
           ),

@@ -12,44 +12,11 @@ class RegionListPage extends StatelessWidget {
     required this.onSelectRestaurantKey,
   });
 
-  // ✅ 지역 선택 바텀시트
-  Future<String?> _pickRegion(BuildContext context) async {
-    const regions = [
-      '서울', '부산', '대구', '인천', '광주', '대전', '울산',
-      '제주', '강원', '경기', '충북', '충남', '전북', '전남', '경북', '경남',
-    ];
-
-    return showModalBottomSheet<String>(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          child: ListView.separated(
-            itemCount: regions.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (context, i) {
-              final r = regions[i];
-              return ListTile(
-                title: Text(r),
-                onTap: () => Navigator.pop(context, r),
-              );
-            },
-          ),
-        );
-      },
-    );
-  }
-
   Future<void> _openAdd(BuildContext context) async {
-    final region = await _pickRegion(context);
-    if (region == null) return;
-
     final result = await Navigator.push<Restaurant>(
       context,
       MaterialPageRoute(
-        builder: (_) => AddRestaurantPage(region: region),
+        builder: (_) => const AddRestaurantPage(),
       ),
     );
 
@@ -59,7 +26,6 @@ class RegionListPage extends StatelessWidget {
     await box.add(result);
   }
 
-  // ✅ region 기준 그룹핑
   Map<String, List<MapEntry<dynamic, Restaurant>>> _groupByRegion(
       Box<Restaurant> box,
       ) {
@@ -69,8 +35,9 @@ class RegionListPage extends StatelessWidget {
       final r = box.get(key);
       if (r == null) continue;
 
-      grouped.putIfAbsent(r.region, () => []);
-      grouped[r.region]!.add(MapEntry(key, r));
+      final region = (r.region.trim().isEmpty) ? '미지정' : r.region.trim();
+      grouped.putIfAbsent(region, () => []);
+      grouped[region]!.add(MapEntry(key, r));
     }
 
     return grouped;
@@ -111,10 +78,7 @@ class RegionListPage extends StatelessWidget {
               final items = grouped[region]!;
 
               return ExpansionTile(
-                title: Text(
-                  region,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
+                title: Text(region, style: const TextStyle(fontWeight: FontWeight.bold)),
                 subtitle: Text('${items.length}곳'),
                 children: items.map((entry) {
                   final key = entry.key;

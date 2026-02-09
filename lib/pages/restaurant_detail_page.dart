@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-
+import 'package:hive_flutter/hive_flutter.dart';
 import '../models/restaurant.dart';
 
 class RestaurantDetailPage extends StatelessWidget {
+  final dynamic hiveKey; // ✅ Hive key
   final Restaurant restaurant;
-  const RestaurantDetailPage({super.key, required this.restaurant});
+
+  const RestaurantDetailPage({
+    super.key,
+    required this.hiveKey,
+    required this.restaurant,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -19,24 +25,27 @@ class RestaurantDetailPage extends StatelessWidget {
             onPressed: () async {
               final ok = await showDialog<bool>(
                 context: context,
-                builder: (_) => AlertDialog(
+                builder: (ctx) => AlertDialog(
                   title: const Text('삭제할까?'),
                   content: const Text('이 맛집을 목록에서 삭제합니다.'),
                   actions: [
                     TextButton(
-                      onPressed: () => Navigator.pop(context, false),
+                      onPressed: () => Navigator.pop(ctx, false),
                       child: const Text('취소'),
                     ),
                     TextButton(
-                      onPressed: () => Navigator.pop(context, true),
+                      onPressed: () => Navigator.pop(ctx, true),
                       child: const Text('삭제'),
                     ),
                   ],
                 ),
               );
 
+
               if (ok == true) {
-                Navigator.pop(context, true); // ✅ 리스트에서 제거하라고 신호
+                final box = Hive.box<Restaurant>('restaurants');
+                await box.delete(hiveKey);
+                if (context.mounted) Navigator.pop(context, true);
               }
             },
           ),
