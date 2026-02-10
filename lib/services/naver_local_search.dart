@@ -7,17 +7,17 @@ class NaverLocalItem {
   final String address;
   final String link;
 
-  // 네이버 local api의 mapx/mapy (TM128 가능)
-  final double lat;
-  final double lng;
+  // ✅ 네이버 Local API 원본 좌표 (TM128)
+  final double mapx; // X
+  final double mapy; // Y
 
   NaverLocalItem({
     required this.title,
     required this.roadAddress,
     required this.address,
     required this.link,
-    required this.lat,
-    required this.lng,
+    required this.mapx,
+    required this.mapy,
   });
 
   String get cleanTitle =>
@@ -52,7 +52,7 @@ class NaverLocalSearchService {
     );
 
     if (res.statusCode != 200) {
-      throw Exception('Naver search failed: ${res.statusCode}');
+      throw Exception('Naver search failed: ${res.statusCode} ${res.body}');
     }
 
     final data = jsonDecode(res.body) as Map<String, dynamic>;
@@ -64,11 +64,11 @@ class NaverLocalSearchService {
       final mapxStr = (e['mapx'] ?? '').toString();
       final mapyStr = (e['mapy'] ?? '').toString();
 
-      final x = double.tryParse(mapxStr);
-      final y = double.tryParse(mapyStr);
+      final mapx = double.tryParse(mapxStr) ?? 0;
+      final mapy = double.tryParse(mapyStr) ?? 0;
 
-      // 좌표 없거나 이상하면 스킵
-      if (x == null || y == null || x == 0 || y == 0) continue;
+      // 좌표 없으면 스킵
+      if (mapx == 0 || mapy == 0) continue;
 
       result.add(
         NaverLocalItem(
@@ -76,8 +76,8 @@ class NaverLocalSearchService {
           roadAddress: (e['roadAddress'] ?? '').toString(),
           address: (e['address'] ?? '').toString(),
           link: (e['link'] ?? '').toString(),
-          lng: x, // TM128 X
-          lat: y, // TM128 Y
+          mapx: mapx,
+          mapy: mapy,
         ),
       );
     }

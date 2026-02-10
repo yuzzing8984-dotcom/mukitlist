@@ -6,6 +6,8 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 import '../models/restaurant.dart';
 import 'restaurant_detail_page.dart';
+import 'package:flutter/services.dart';
+
 
 class MapPage extends StatefulWidget {
   final dynamic selectedKeyFromList; // 리스트에서 탭한 Hive key
@@ -28,23 +30,23 @@ class MapPageState extends State<MapPage> {
   final Map<dynamic, NMarker> _markers = {};
   Restaurant? _selectedRestaurant;
 
-  dynamic _selectedKey; // ✅ Hive key
+  dynamic _selectedKey; // Hive key
   double? _currentZoom;
 
-  // ✅ 마커 아이콘(기본/선택) - 경로 통일
+  // 마커 아이콘
   final NOverlayImage _iconDefault =
   NOverlayImage.fromAssetImage('assets/markers/marker_food.png');
   final NOverlayImage _iconSelected =
   NOverlayImage.fromAssetImage('assets/markers/marker_food_selected.png');
 
-  // ✅ 애니메이션(선택 핀만 살짝 팝)
+  // 선택 애니메이션
   double _selectedScale = 1.0;
   bool _isAnimatingMarker = false;
 
   Box<Restaurant> get _box => Hive.box<Restaurant>('restaurants');
   String _selectedRegion = '전체';
 
-  // ✅ 지역 좌표(필요한 것만 유지)
+  // 지역 카메라(선택한 지역으로 이동할 때만 사용)
   final Map<String, NCameraPosition> _regionCamera = {
     '서울': const NCameraPosition(target: NLatLng(37.5665, 126.9780), zoom: 11),
     '부산': const NCameraPosition(target: NLatLng(35.1796, 129.0756), zoom: 11),
@@ -64,20 +66,31 @@ class MapPageState extends State<MapPage> {
     '경남': const NCameraPosition(target: NLatLng(35.4606, 128.2132), zoom: 9),
   };
 
-  // ✅ 전국(제주 포함) 초기 카메라
+  // 전국 고정 카메라
   static const NLatLng _koreaCenter = NLatLng(35.9, 127.7);
   static const double _koreaZoom = 5.8;
-
-  // =========================
-  // Lifecycle
-  // =========================
 
   @override
   void initState() {
     super.initState();
+    // ✅ 여기 추가
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.white,
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light, // iOS용
+      ),
+    );
+
     _sub = _box.watch().listen((_) async {
       await _syncMarkers();
-      // 지역 자동 목록이 줄어드는 경우(삭제로 인해) 현재 선택 지역이 사라질 수 있음
+
+      // ✅ 전체 + 선택없음이면 전국 고정 유지
+      if (_selectedRegion == '전체' && _selectedKey == null) {
+        await _moveToKorea();
+      }
+
+      // 저장된 지역이 사라졌으면 '전체'로
       final regions = _getAvailableRegions();
       if (!regions.contains(_selectedRegion)) {
         if (!mounted) return;
@@ -93,7 +106,6 @@ class MapPageState extends State<MapPage> {
     final incomingKey = widget.selectedKeyFromList;
     if (incomingKey == null) return;
 
-    // 같은거 또 들어오면 무시
     if (incomingKey == _selectedKey) {
       widget.onConsumedSelectedKey();
       return;
@@ -108,10 +120,7 @@ class MapPageState extends State<MapPage> {
     super.dispose();
   }
 
-  // =========================
-  // Regions (saved only)
-  // =========================
-
+  // 저장된 region 목록
   List<String> _getAvailableRegions() {
     final regions = <String>{};
     for (final r in _box.values) {
@@ -119,10 +128,6 @@ class MapPageState extends State<MapPage> {
     }
     return ['전체', ...regions.toList()..sort()];
   }
-
-  // =========================
-  // Camera
-  // =========================
 
   Future<void> _moveToRegion(String region) async {
     final c = _controller;
@@ -145,11 +150,10 @@ class MapPageState extends State<MapPage> {
     );
   }
 
-  /// ✅ 줌 유지 기본 + 너무 멀면 최소 14까지만 자동 확대
   Future<void> _focusRestaurant(Restaurant r) async {
     final c = _controller;
     if (c == null) return;
-    if (r.lat == null || r.lng == null) return null;
+    if (r.lat == null || r.lng == null) return;
 
     final z = _currentZoom ?? 12.0;
     final keepOrMin = z < 14.0 ? 14.0 : z;
@@ -162,10 +166,6 @@ class MapPageState extends State<MapPage> {
     );
   }
 
-  // =========================
-  // Filtering / marker util
-  // =========================
-
   bool _shouldShow(Restaurant r) {
     if (r.lat == null || r.lng == null) return false;
     if (_selectedRegion == '전체') return true;
@@ -177,17 +177,13 @@ class MapPageState extends State<MapPage> {
 
   Size _markerSize(dynamic key) {
     final isSelected = key == _selectedKey;
-    final base = isSelected ? 64.0 : 48.0;
+    final base = isSelected ? 56.0 : 36.0; // ✅ 조금 더 자연스럽게
     final scale = isSelected ? _selectedScale : 1.0;
     final s = base * scale;
     return Size(s, s);
   }
 
   int _markerZIndex(dynamic key) => key == _selectedKey ? 100 : 0;
-
-  // =========================
-  // List -> Map selection
-  // =========================
 
   Future<void> _selectByKeyFromList(dynamic key) async {
     final r = _box.get(key);
@@ -196,23 +192,22 @@ class MapPageState extends State<MapPage> {
       return;
     }
 
-    // ✅ 지역 필터가 걸려있고 해당 지역이 아니면 UX상 전체로 풀어주기
+    // 필터 걸려있는데 다른 지역이면 전체로 풀기
     if (_selectedRegion != '전체' && r.region != _selectedRegion) {
       if (!mounted) return;
       setState(() => _selectedRegion = '전체');
       await _syncMarkers();
     }
 
-    if (!mounted) return;
     final prevKey = _selectedKey;
 
+    if (!mounted) return;
     setState(() {
       _selectedKey = key;
       _selectedRestaurant = r;
       _selectedScale = 1.0;
     });
 
-    // 아이콘/사이즈 반영
     await _refreshMarker(prevKey);
     await _refreshMarker(_selectedKey);
 
@@ -222,13 +217,7 @@ class MapPageState extends State<MapPage> {
     widget.onConsumedSelectedKey();
   }
 
-  // =========================
-  // Marker build / update
-  // =========================
-
   NMarker _buildMarker({required dynamic key, required Restaurant r}) {
-    debugPrint('MARKER ${r.name} lat=${r.lat} lng=${r.lng}'); // ✅ 정답
-
     final marker = NMarker(
       id: 'r_$key',
       position: NLatLng(r.lat!, r.lng!),
@@ -237,11 +226,9 @@ class MapPageState extends State<MapPage> {
     );
 
     marker.setAnchor(const NPoint(0.5, 0.85));
-
     marker.setZIndex(_markerZIndex(key));
 
     marker.setOnTapListener((overlay) async {
-      // 같은 핀 재탭 스킵
       if (_selectedKey == key) return;
 
       final prevKey = _selectedKey;
@@ -253,7 +240,6 @@ class MapPageState extends State<MapPage> {
         _selectedScale = 1.0;
       });
 
-      // 바뀐 2개만 갱신
       await _refreshMarker(prevKey);
       await _refreshMarker(key);
 
@@ -269,7 +255,6 @@ class MapPageState extends State<MapPage> {
     if (c == null) return;
     if (key == null) return;
 
-    // 기존 삭제
     final old = _markers[key];
     if (old != null) {
       await c.deleteOverlay(old.info);
@@ -303,11 +288,9 @@ class MapPageState extends State<MapPage> {
       await c.addOverlay(marker);
       _markers[key] = marker;
     }
-  }
 
-  // =========================
-  // Animation / clear selection
-  // =========================
+    // ✅ 여기서 fitBounds 같은 카메라 자동 변경은 절대 하지 않음
+  }
 
   Future<void> _playSelectPopAnimationOptimized() async {
     if (_isAnimatingMarker) return;
@@ -336,11 +319,12 @@ class MapPageState extends State<MapPage> {
     });
 
     await _refreshMarker(prevKey);
-  }
 
-  // =========================
-  // Detail / Delete
-  // =========================
+    // ✅ 전체라면 선택 해제 후 전국 고정으로 복귀
+    if (_selectedRegion == '전체') {
+      await _moveToKorea();
+    }
+  }
 
   Future<void> _openDetail(dynamic key, Restaurant r) async {
     final deleted = await Navigator.push<bool>(
@@ -361,13 +345,12 @@ class MapPageState extends State<MapPage> {
         _selectedScale = 1.0;
       });
       await _syncMarkers();
+
+      if (_selectedRegion == '전체') {
+        await _moveToKorea();
+      }
     }
   }
-
-
-  // =========================
-  // UI
-  // =========================
 
   @override
   Widget build(BuildContext context) {
@@ -375,7 +358,7 @@ class MapPageState extends State<MapPage> {
 
     return Stack(
       children: [
-        // ✅ NaverMap은 "딱 1개"만!
+        // 1) 지도
         NaverMap(
           options: const NaverMapViewOptions(
             initialCameraPosition: NCameraPosition(
@@ -387,34 +370,98 @@ class MapPageState extends State<MapPage> {
             _controller = controller;
             _currentZoom = _koreaZoom;
             await _syncMarkers();
+
+            // ✅ 첫 진입은 무조건 전국 고정
+            await _moveToKorea();
           },
           onCameraChange: (reason, animated) async {
-            final c = _controller;
-            if (c == null) return;
-            final pos = await c.getCameraPosition();
-            _currentZoom = pos.zoom;
+            final pos = await _controller?.getCameraPosition();
+            _currentZoom = pos?.zoom;
           },
           onMapTapped: (point, latLng) {
             _clearSelectionOptimized();
           },
         ),
 
-        // ✅ 상단: 지역 드롭다운(저장된 지역만)
-        SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+        // 2) 상단 고정 헤더 (로고 + 제목) - AppBar 느낌
+        Positioned(
+          left: 0,
+          right: 0,
+          top: 78,
+          child: Container(
+            color: Colors.white, // ✅ 상태바까지 흰 배경
+            child: SafeArea(
+              bottom: false,
+              child: Container(
+                height: 88, // ✅ 2줄이면 68 추천 (64도 가능)
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: const BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(color: Colors.black12, width: 1),
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Image.asset(
+                      'assets/icons/pin.png', // ✅ 네 핀 이미지 경로
+                      width: 48,
+                      height: 48,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: const [
+                          Text(
+                            '먹킷리스트',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.3,
+                              color: Color(0xFF222222),
+                            ),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            '내가 저장한 맛집',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.black45,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+
+
+        // 3) 지역 드롭다운 (헤더 아래)
+        Positioned(
+          top: 76, // 헤더(64) + 여백(8)
+          left: 12,
+          right: 12,
+          child: SafeArea(
+            bottom: false,
             child: Material(
-              elevation: 6,
+              elevation: 2,
               borderRadius: BorderRadius.circular(14),
               child: Padding(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                // 기존 padding이 크면 ↓로 줄이기
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
-                    value: regions.contains(_selectedRegion)
-                        ? _selectedRegion
-                        : '전체',
+                    value: regions.contains(_selectedRegion) ? _selectedRegion : '전체',
                     isExpanded: true,
+                    isDense: true,
+
                     items: regions
                         .toSet()
                         .toList()
@@ -422,8 +469,7 @@ class MapPageState extends State<MapPage> {
                           (e) => DropdownMenuItem(
                         value: e,
                         child: Padding(
-                          padding:
-                          const EdgeInsets.symmetric(vertical: 10),
+                          padding: const EdgeInsets.symmetric(vertical: 4),
                           child: Text(e),
                         ),
                       ),
@@ -443,7 +489,6 @@ class MapPageState extends State<MapPage> {
                       if (v == '전체') {
                         await _moveToKorea();
                       } else {
-                        // 저장된 지역만 보여줘도, 카메라 포지션 없을 수 있음(예: 지역명 다르게 저장될 때)
                         if (_regionCamera.containsKey(v)) {
                           await _moveToRegion(v);
                         }
@@ -458,7 +503,7 @@ class MapPageState extends State<MapPage> {
           ),
         ),
 
-        // ✅ 바텀시트
+        // 4) 바텀시트
         if (_selectedRestaurant != null)
           Positioned.fill(
             child: Align(
@@ -475,6 +520,7 @@ class MapPageState extends State<MapPage> {
   }
 }
 
+// ✅ 반드시 MapPageState 밖(파일 최하단)에 있어야 함!
 class _RestaurantBottomSheet extends StatelessWidget {
   final Restaurant restaurant;
   final VoidCallback onClose;
