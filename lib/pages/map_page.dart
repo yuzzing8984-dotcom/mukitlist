@@ -8,7 +8,6 @@ import '../models/restaurant.dart';
 import 'restaurant_detail_page.dart';
 import 'package:flutter/services.dart';
 
-
 class MapPage extends StatefulWidget {
   final dynamic selectedKeyFromList; // 리스트에서 탭한 Hive key
   final VoidCallback onConsumedSelectedKey;
@@ -34,10 +33,12 @@ class MapPageState extends State<MapPage> {
   double? _currentZoom;
 
   // 마커 아이콘
-  final NOverlayImage _iconDefault =
-  NOverlayImage.fromAssetImage('assets/markers/marker_food.png');
-  final NOverlayImage _iconSelected =
-  NOverlayImage.fromAssetImage('assets/markers/marker_food_selected.png');
+  final NOverlayImage _iconDefault = NOverlayImage.fromAssetImage(
+    'assets/markers/marker_food.png',
+  );
+  final NOverlayImage _iconSelected = NOverlayImage.fromAssetImage(
+    'assets/markers/marker_food_selected.png',
+  );
 
   // 선택 애니메이션
   double _selectedScale = 1.0;
@@ -67,8 +68,8 @@ class MapPageState extends State<MapPage> {
   };
 
   // 전국 고정 카메라
-  static const NLatLng _koreaCenter = NLatLng(35.9, 127.7);
-  static const double _koreaZoom = 5.8;
+  static const NLatLng _koreaCenter = NLatLng(36.5, 127.85);
+  static const double _koreaZoom = 6.0;
 
   @override
   void initState() {
@@ -330,10 +331,7 @@ class MapPageState extends State<MapPage> {
     final deleted = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (_) => RestaurantDetailPage(
-          hiveKey: key,
-          restaurant: r,
-        ),
+        builder: (_) => RestaurantDetailPage(hiveKey: key, restaurant: r),
       ),
     );
 
@@ -355,6 +353,10 @@ class MapPageState extends State<MapPage> {
   @override
   Widget build(BuildContext context) {
     final regions = _getAvailableRegions();
+
+    final topPad = MediaQuery.of(context).padding.top;
+    const headerH = 80.0; // ✅ 상단 제목바 높이
+    const gap = 14.0; // ✅ 제목바-드롭다운 간격
 
     return Stack(
       children: [
@@ -387,7 +389,7 @@ class MapPageState extends State<MapPage> {
         Positioned(
           left: 0,
           right: 0,
-          top: 78,
+          top: 0,
           child: Container(
             color: Colors.white, // ✅ 상태바까지 흰 배경
             child: SafeArea(
@@ -408,7 +410,7 @@ class MapPageState extends State<MapPage> {
                       width: 48,
                       height: 48,
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 2),
                     Expanded(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -441,62 +443,56 @@ class MapPageState extends State<MapPage> {
           ),
         ),
 
-
-        // 3) 지역 드롭다운 (헤더 아래)
+        // ✅ 지역 드롭다운 (헤더 바로 아래 고정)
         Positioned(
-          top: 76, // 헤더(64) + 여백(8)
           left: 12,
           right: 12,
-          child: SafeArea(
-            bottom: false,
-            child: Material(
-              elevation: 2,
-              borderRadius: BorderRadius.circular(14),
-              child: Padding(
-                // 기존 padding이 크면 ↓로 줄이기
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          top: topPad + headerH + gap,
+          child: Material(
+            elevation: 8,
+            borderRadius: BorderRadius.circular(16),
+            color: Colors.white,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: regions.contains(_selectedRegion)
+                      ? _selectedRegion
+                      : '전체',
+                  isExpanded: true,
 
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: regions.contains(_selectedRegion) ? _selectedRegion : '전체',
-                    isExpanded: true,
-                    isDense: true,
-
-                    items: regions
-                        .toSet()
-                        .toList()
-                        .map(
-                          (e) => DropdownMenuItem(
-                        value: e,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Text(e),
-                        ),
+                  icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                  items: regions.map((e) {
+                    return DropdownMenuItem<String>(
+                      value: e,
+                      child: Padding(
+                        // ✅ 드롭다운 리스트(펼쳐진 메뉴)에서 한 줄 높이
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Text(e, style: const TextStyle(fontSize: 14)),
                       ),
-                    )
-                        .toList(),
-                    onChanged: (v) async {
-                      if (v == null) return;
+                    );
+                  }).toList(),
+                  onChanged: (v) async {
+                    if (v == null) return;
 
-                      if (!mounted) return;
-                      setState(() {
-                        _selectedRegion = v;
-                        _selectedRestaurant = null;
-                        _selectedKey = null;
-                        _selectedScale = 1.0;
-                      });
+                    if (!mounted) return;
+                    setState(() {
+                      _selectedRegion = v;
+                      _selectedRestaurant = null;
+                      _selectedKey = null;
+                      _selectedScale = 1.0;
+                    });
 
-                      if (v == '전체') {
-                        await _moveToKorea();
-                      } else {
-                        if (_regionCamera.containsKey(v)) {
-                          await _moveToRegion(v);
-                        }
+                    if (v == '전체') {
+                      await _moveToKorea();
+                    } else {
+                      if (_regionCamera.containsKey(v)) {
+                        await _moveToRegion(v);
                       }
+                    }
 
-                      await _syncMarkers();
-                    },
-                  ),
+                    await _syncMarkers();
+                  },
                 ),
               ),
             ),
@@ -570,10 +566,7 @@ class _RestaurantBottomSheet extends StatelessWidget {
                       ),
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: onClose,
-                  ),
+                  IconButton(icon: const Icon(Icons.close), onPressed: onClose),
                 ],
               ),
               const SizedBox(height: 8),
