@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 import 'map_page.dart';
 import 'region_list_page.dart';
+import '../models/restaurant.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'add_restaurant_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -39,6 +42,26 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
+
+      floatingActionButton: _index == 0
+          ? FloatingActionButton(
+        child: const Icon(Icons.add),
+        onPressed: () async {
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => AddRestaurantPage(),
+            ),
+          );
+
+          if (result != null) {
+            final box = Hive.box<Restaurant>('restaurants');
+            await box.add(result);
+          }
+        },
+      )
+          : null,
+
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _index,
         onTap: (i) => setState(() => _index = i),

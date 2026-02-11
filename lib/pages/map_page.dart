@@ -84,18 +84,26 @@ class MapPageState extends State<MapPage> {
     );
 
     _sub = _box.watch().listen((_) async {
-      await _syncMarkers();
-
-      // ✅ 전체 + 선택없음이면 전국 고정 유지
-      if (_selectedRegion == '전체' && _selectedKey == null) {
-        await _moveToKorea();
-      }
-
-      // 저장된 지역이 사라졌으면 '전체'로
+      // 1) 저장된 지역이 사라졌으면 먼저 '전체'로 정리
       final regions = _getAvailableRegions();
       if (!regions.contains(_selectedRegion)) {
         if (!mounted) return;
-        setState(() => _selectedRegion = '전체');
+        setState(() {
+          _selectedRegion = '전체';
+          _selectedRestaurant = null;
+          _selectedKey = null;
+          _selectedScale = 1.0;
+        });
+      }
+
+      // 2) 마커만 갱신
+      await _syncMarkers();
+
+      if (mounted) setState(() {});
+
+      // 3) "전체 + 선택없음"일 때만 전국 고정 (원하면 유지)
+      if (_selectedRegion == '전체' && _selectedKey == null) {
+        await _moveToKorea();
       }
     });
   }
@@ -354,6 +362,8 @@ class MapPageState extends State<MapPage> {
   Widget build(BuildContext context) {
     final regions = _getAvailableRegions();
 
+    final isEmpty = _box.isEmpty;
+
     final topPad = MediaQuery.of(context).padding.top;
     const headerH = 80.0; // ✅ 상단 제목바 높이
     const gap = 14.0; // ✅ 제목바-드롭다운 간격
@@ -511,6 +521,40 @@ class MapPageState extends State<MapPage> {
               ),
             ),
           ),
+        if (isEmpty)
+          Positioned.fill(
+            child: IgnorePointer(
+              ignoring: true, // 지도 터치 막지 않음
+              child: Center(
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 24),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.92),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.black12),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(Icons.place_outlined, size: 42, color: Colors.black54),
+                      SizedBox(height: 10),
+                      Text(
+                        '아직 저장된 맛집이 없어요',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                      ),
+                      SizedBox(height: 6),
+                      Text(
+                        '+ 버튼으로 첫 맛집을 추가해보세요',
+                        style: TextStyle(fontSize: 13, color: Colors.black54),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
       ],
     );
   }

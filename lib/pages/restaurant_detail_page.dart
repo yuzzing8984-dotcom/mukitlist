@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import '../models/restaurant.dart';
 
-class RestaurantDetailPage extends StatelessWidget {
-  final dynamic hiveKey; // ✅ Hive key
+import '../models/restaurant.dart';
+import 'add_restaurant_page.dart';
+
+class RestaurantDetailPage extends StatefulWidget {
+  final dynamic hiveKey;
   final Restaurant restaurant;
 
   const RestaurantDetailPage({
@@ -14,40 +16,77 @@ class RestaurantDetailPage extends StatelessWidget {
   });
 
   @override
+  State<RestaurantDetailPage> createState() => _RestaurantDetailPageState();
+}
+
+class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
+  late Restaurant _restaurant;
+
+  @override
+  void initState() {
+    super.initState();
+    _restaurant = widget.restaurant;
+  }
+
+  Future<void> _onEditPressed() async {
+    // ✅ AddRestaurantPage가 수정모드(initial)를 받는 버전이어야 함
+    final updated = await Navigator.push<Restaurant>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddRestaurantPage(initial: _restaurant),
+      ),
+    );
+
+    if (updated == null) return;
+
+    final box = Hive.box<Restaurant>('restaurants');
+    await box.put(widget.hiveKey, updated);
+
+    if (!mounted) return;
+    setState(() => _restaurant = updated);
+  }
+
+  Future<void> _onDeletePressed() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('삭제할까?'),
+        content: const Text('이 맛집을 목록에서 삭제합니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok == true) {
+      final box = Hive.box<Restaurant>('restaurants');
+      await box.delete(widget.hiveKey);
+      if (mounted) Navigator.pop(context, true);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(restaurant.name),
+        title: Text(_restaurant.name),
         actions: [
+          IconButton(
+            tooltip: '수정',
+            icon: const Icon(Icons.edit),
+            onPressed: _onEditPressed,
+          ),
           IconButton(
             tooltip: '삭제',
             icon: const Icon(Icons.delete_outline),
-            onPressed: () async {
-              final ok = await showDialog<bool>(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text('삭제할까?'),
-                  content: const Text('이 맛집을 목록에서 삭제합니다.'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      child: const Text('취소'),
-                    ),
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      child: const Text('삭제'),
-                    ),
-                  ],
-                ),
-              );
-
-
-              if (ok == true) {
-                final box = Hive.box<Restaurant>('restaurants');
-                await box.delete(hiveKey);
-                if (context.mounted) Navigator.pop(context, true);
-              }
-            },
+            onPressed: _onDeletePressed,
           ),
         ],
       ),
@@ -56,14 +95,12 @@ class RestaurantDetailPage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _InfoRow(label: '지역', value: restaurant.region),
+            _InfoRow(label: '지역', value: _restaurant.region),
             const SizedBox(height: 8),
-            _InfoRow(label: '동네', value: restaurant.district),
+            _InfoRow(label: '동네', value: _restaurant.district),
             const SizedBox(height: 16),
             const Text('메모', style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-
-            // ✅ 메모 박스(여기서 Container 끝!)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),
@@ -72,19 +109,16 @@ class RestaurantDetailPage extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
-                restaurant.memo.trim().isEmpty ? '메모 없음' : restaurant.memo,
+                _restaurant.memo.trim().isEmpty ? '메모 없음' : _restaurant.memo,
               ),
             ),
-
             const Spacer(),
-
-            // ✅ 지도 버튼(Container 밖!)
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: () async {
                   final query =
-                      '${restaurant.name} ${restaurant.district} ${restaurant.region}';
+                      '${_restaurant.name} ${_restaurant.district} ${_restaurant.region}';
                   await openMapSearch(query);
                 },
                 icon: const Icon(Icons.map_outlined),
@@ -125,12 +159,9 @@ class _InfoRow extends StatelessWidget {
 Future<void> openMapSearch(String query) async {
   final encoded = Uri.encodeComponent(query);
 
-  // 안드로이드 지도앱(geo:) 우선 시도
   final geoUri = Uri.parse('geo:0,0?q=$encoded');
-
-  // 실패하면 웹 구글지도
   final webUri =
-      Uri.parse('https://www.google.com/maps/search/?api=1&query=$encoded');
+  Uri.parse('https://www.google.com/maps/search/?api=1&query=$encoded');
 
   if (await canLaunchUrl(geoUri)) {
     await launchUrl(geoUri, mode: LaunchMode.externalApplication);

@@ -6,11 +6,21 @@ import '../services/naver_local_search.dart';
 import '../services/naver_coord.dart';
 
 class AddRestaurantPage extends StatefulWidget {
-  const AddRestaurantPage({super.key});
+  final Restaurant? initial;      // ✅ 수정모드용
+  final dynamic hiveKey;          // ✅ 수정 시 put에 쓸 키(선택)
+
+  const AddRestaurantPage({
+    super.key,
+    this.initial,
+    this.hiveKey,
+  });
+
+  bool get isEdit => initial != null;
 
   @override
   State<AddRestaurantPage> createState() => _AddRestaurantPageState();
 }
+
 
 class _AddRestaurantPageState extends State<AddRestaurantPage> {
   final _formKey = GlobalKey<FormState>();
@@ -41,6 +51,15 @@ class _AddRestaurantPageState extends State<AddRestaurantPage> {
 
   late final NaverLocalSearchService _naver;
 
+  void _invalidatePick() {
+    if (!_pickedFromSearch) return;
+    setState(() {
+      _pickedFromSearch = false;
+      _selectedLat = null;
+      _selectedLng = null;
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -48,7 +67,29 @@ class _AddRestaurantPageState extends State<AddRestaurantPage> {
       clientId: dotenv.env['NAVER_CLIENT_ID']!,
       clientSecret: dotenv.env['NAVER_CLIENT_SECRET']!,
     );
+
+    // ✅ 수정모드면 기존값 세팅
+    final init = widget.initial;
+    if (init != null) {
+      _selectedRegion = init.region;
+      _nameCtrl.text = init.name;
+      _districtCtrl.text = init.district;
+      _memoCtrl.text = init.memo;
+      _mapUrlCtrl.text = init.mapUrl ?? '';
+
+      _selectedLat = init.lat;
+      _selectedLng = init.lng;
+
+      // 수정은 이미 좌표가 있으니까 저장 허용
+      _pickedFromSearch = true;
+    }
+      // ✅ 추가모드에서만: 이름/주소 직접 수정하면 '검색선택' 무효 처리
+     if (widget.initial == null) {
+       _nameCtrl.addListener(_invalidatePick);
+       _districtCtrl.addListener(_invalidatePick);
+    }
   }
+
 
   @override
   void dispose() {
@@ -81,28 +122,38 @@ class _AddRestaurantPageState extends State<AddRestaurantPage> {
     return nameOk && addrOk && coordOk && _pickedFromSearch;
   }
 
-  void _save() {
-    if (!_formKey.currentState!.validate()) return;
+void _save() {
+  if (!_formKey.currentState!.validate()) return;
 
-    if (!_canSave) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('검색 결과를 선택해야 지도에 핀이 표시돼요')),
-      );
-      return;
-    }
-
-    final restaurant = Restaurant(
-      region: _selectedRegion,
-      district: _districtCtrl.text.trim(),
-      name: _nameCtrl.text.trim(),
-      memo: _memoCtrl.text.trim(),
-      lat: _selectedLat!,
-      lng: _selectedLng!,
-      mapUrl: _mapUrlCtrl.text.trim().isEmpty ? null : _mapUrlCtrl.text.trim(),
+  // ✅ 추가모드에서만 '검색 선택 강제'
+  if (!widget.isEdit && !_canSave) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('검색 결과를 선택해야 지도에 핀이 표시돼요')),
     );
-
-    Navigator.pop(context, restaurant);
+    return;
   }
+
+  // 수정모드면 좌표는 기존값 허용
+  if (_selectedLat == null || _selectedLng == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('좌표가 없습니다. 다시 검색해서 선택해줘')),
+    );
+    return;
+  }
+
+  final restaurant = Restaurant(
+    region: _selectedRegion,
+    district: _districtCtrl.text.trim(),
+    name: _nameCtrl.text.trim(),
+    memo: _memoCtrl.text.trim(),
+    lat: _selectedLat!,
+    lng: _selectedLng!,
+    mapUrl: _mapUrlCtrl.text.trim().isEmpty ? null : _mapUrlCtrl.text.trim(),
+  );
+
+  Navigator.pop(context, restaurant); // ✅ 추가/수정 모두 Restaurant 반환
+}
+
 
   Future<void> _search() async {
     final q = _searchCtrl.text.trim();
@@ -189,23 +240,16 @@ class _AddRestaurantPageState extends State<AddRestaurantPage> {
 
   @override
   Widget build(BuildContext context) {
-    final selectedText = (_selectedLat != null && _selectedLng != null)
-        ? '좌표: ${_selectedLat!.toStringAsFixed(6)}, ${_selectedLng!.toStringAsFixed(6)}'
-        : '좌표 미선택';
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('맛집 추가'),
-        actions: [
-          TextButton(
-            onPressed: _save,
-            child: const Text(
-              '저장',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(widget.isEdit ? '맛집 수정' : '맛집 추가'),
+            actions: [
+              TextButton(
+                onPressed: _save,
+                child: const Text('저장', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
           ),
-        ],
-      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Form(
@@ -279,6 +323,30 @@ class _AddRestaurantPageState extends State<AddRestaurantPage> {
                   ),
                 ),
               ],
+
+                            const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.only(left: 4),
+                child: Row(
+                  children: [
+                    Icon(
+                      _pickedFromSearch ? Icons.check_circle : Icons.error,
+                      size: 16,
+                      color: _pickedFromSearch ? Colors.green : Colors.redAccent,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      _pickedFromSearch
+                          ? '지도 위치가 선택되었습니다'
+                          : '검색 결과를 선택해야 저장할 수 있어요',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: _pickedFromSearch ? Colors.black54 : Colors.redAccent,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
 
               const SizedBox(height: 16),
               const Divider(height: 1),
