@@ -1,3 +1,12 @@
+import java.util.Properties
+import java.io.FileInputStream
+
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -5,7 +14,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.mukitlist"
+    namespace = "com.mukitlist.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -18,8 +27,17 @@ android {
         jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
+signingConfigs {
+    create("release") {
+        keyAlias = keystoreProperties["keyAlias"] as String
+        keyPassword = keystoreProperties["keyPassword"] as String
+        storeFile = file(keystoreProperties["storeFile"] as String)
+        storePassword = keystoreProperties["storePassword"] as String
+    }
+}
+
     defaultConfig {
-        applicationId = "com.example.mukitlist"
+        applicationId = "com.mukitlist.app"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -28,7 +46,7 @@ android {
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }

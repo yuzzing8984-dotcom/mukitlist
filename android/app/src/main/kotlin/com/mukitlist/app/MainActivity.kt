@@ -1,4 +1,4 @@
-package com.example.mukitlist
+package com.mukitlist.app
 
 import io.flutter.embedding.android.FlutterActivity
 
