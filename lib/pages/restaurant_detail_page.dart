@@ -29,7 +29,6 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
   }
 
   Future<void> _onEditPressed() async {
-    // ✅ AddRestaurantPage가 수정모드(initial)를 받는 버전이어야 함
     final updated = await Navigator.push<Restaurant>(
       context,
       MaterialPageRoute(
@@ -74,6 +73,10 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final mapQuery = _restaurant.name.trim(); // 🔥 지도는 name만
+    final searchQuery =
+        '${_restaurant.name} ${_restaurant.region}'.trim(); // 🔥 검색은 지역까지만
+
     return Scaffold(
       appBar: AppBar(
         title: Text(_restaurant.name),
@@ -99,8 +102,10 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
             const SizedBox(height: 8),
             _InfoRow(label: '동네', value: _restaurant.district),
             const SizedBox(height: 16),
+
             const Text('메모', style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
+
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),
@@ -109,21 +114,32 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
-                _restaurant.memo.trim().isEmpty ? '메모 없음' : _restaurant.memo,
+                _restaurant.memo.trim().isEmpty
+                    ? '메모 없음'
+                    : _restaurant.memo,
               ),
             ),
+
             const Spacer(),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () async {
-                  final query =
-                      '${_restaurant.name} ${_restaurant.district} ${_restaurant.region}';
-                  await openMapSearch(query);
-                },
-                icon: const Icon(Icons.map_outlined),
-                label: const Text('지도에서 검색하기'),
-              ),
+
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => openNaverMapSearch(mapQuery),
+                    icon: const Icon(Icons.navigation_outlined),
+                    label: const Text('네이버지도'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => openNaverWebSearch(searchQuery),
+                    icon: const Icon(Icons.search),
+                    label: const Text('네이버검색'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -156,16 +172,35 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
-Future<void> openMapSearch(String query) async {
+// ==========================
+// 🔥 네이버 지도 열기
+// ==========================
+
+Future<void> openNaverMapSearch(String query) async {
   final encoded = Uri.encodeComponent(query);
 
-  final geoUri = Uri.parse('geo:0,0?q=$encoded');
-  final webUri =
-  Uri.parse('https://www.google.com/maps/search/?api=1&query=$encoded');
+  final appUri = Uri.parse(
+    'nmap://search?query=$encoded&appname=com.mukitlist.app',
+  );
 
-  if (await canLaunchUrl(geoUri)) {
-    await launchUrl(geoUri, mode: LaunchMode.externalApplication);
+  final webUri =
+      Uri.parse('https://m.map.naver.com/search2/search.naver?query=$encoded');
+
+  if (await canLaunchUrl(appUri)) {
+    await launchUrl(appUri, mode: LaunchMode.externalApplication);
   } else {
     await launchUrl(webUri, mode: LaunchMode.externalApplication);
   }
+}
+
+// ==========================
+// 🔥 네이버 검색 열기
+// ==========================
+
+Future<void> openNaverWebSearch(String query) async {
+  final encoded = Uri.encodeComponent(query);
+  final uri =
+      Uri.parse('https://m.search.naver.com/search.naver?query=$encoded');
+
+  await launchUrl(uri, mode: LaunchMode.externalApplication);
 }
