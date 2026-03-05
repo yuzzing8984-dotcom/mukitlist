@@ -1,12 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 import '../models/restaurant.dart';
 import 'restaurant_detail_page.dart';
-import 'package:flutter/services.dart';
 
 class MapPage extends StatefulWidget {
   final dynamic selectedKeyFromList; // 리스트에서 탭한 Hive key
@@ -23,6 +24,11 @@ class MapPage extends StatefulWidget {
 }
 
 class MapPageState extends State<MapPage> {
+  // ✅ AdMob Banner
+  BannerAd? _bannerAd;
+  bool _isBannerLoaded = false;
+
+  // ✅ Naver Map
   NaverMapController? _controller;
   StreamSubscription<BoxEvent>? _sub;
 
@@ -33,12 +39,10 @@ class MapPageState extends State<MapPage> {
   double? _currentZoom;
 
   // 마커 아이콘
-  final NOverlayImage _iconDefault = NOverlayImage.fromAssetImage(
-    'assets/markers/marker_food.png',
-  );
-  final NOverlayImage _iconSelected = NOverlayImage.fromAssetImage(
-    'assets/markers/marker_food_selected.png',
-  );
+  final NOverlayImage _iconDefault =
+      NOverlayImage.fromAssetImage('assets/markers/marker_food.png');
+  final NOverlayImage _iconSelected =
+      NOverlayImage.fromAssetImage('assets/markers/marker_food_selected.png');
 
   // 선택 애니메이션
   double _selectedScale = 1.0;
@@ -74,15 +78,36 @@ class MapPageState extends State<MapPage> {
   @override
   void initState() {
     super.initState();
-    // ✅ 여기 추가
+
+    // ✅ 상태바 흰색 + 검정 아이콘
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.white,
         statusBarIconBrightness: Brightness.dark,
-        statusBarBrightness: Brightness.light, // iOS용
+        statusBarBrightness: Brightness.light, // iOS
       ),
     );
 
+    // ✅ 배너 광고 (네꺼 실제 광고 단위 ID)
+    _bannerAd = BannerAd(
+      adUnitId: 'ca-app-pub-5404045286509114/5951416082',
+      size: AdSize.banner,
+      request: const AdRequest(),
+      listener: BannerAdListener(
+        onAdLoaded: (ad) {
+          print("광고 로드 성공");
+          setState(() {
+           _isBannerLoaded = true;
+      });
+    },
+        onAdFailedToLoad: (ad, error) {
+          print("광고 로드 실패: $error");
+          ad.dispose();
+        },
+      ),
+    )..load();
+
+    // ✅ Hive 변경 감지
     _sub = _box.watch().listen((_) async {
       // 1) 저장된 지역이 사라졌으면 먼저 '전체'로 정리
       final regions = _getAvailableRegions();
@@ -98,10 +123,9 @@ class MapPageState extends State<MapPage> {
 
       // 2) 마커만 갱신
       await _syncMarkers();
-
       if (mounted) setState(() {});
 
-      // 3) "전체 + 선택없음"일 때만 전국 고정 (원하면 유지)
+      // 3) "전체 + 선택없음"일 때만 전국 고정
       if (_selectedRegion == '전체' && _selectedKey == null) {
         await _moveToKorea();
       }
@@ -126,6 +150,7 @@ class MapPageState extends State<MapPage> {
   @override
   void dispose() {
     _sub?.cancel();
+    _bannerAd?.dispose();
     super.dispose();
   }
 
@@ -186,7 +211,7 @@ class MapPageState extends State<MapPage> {
 
   Size _markerSize(dynamic key) {
     final isSelected = key == _selectedKey;
-    final base = isSelected ? 56.0 : 36.0; // ✅ 조금 더 자연스럽게
+    final base = isSelected ? 56.0 : 36.0;
     final scale = isSelected ? _selectedScale : 1.0;
     final s = base * scale;
     return Size(s, s);
@@ -297,8 +322,6 @@ class MapPageState extends State<MapPage> {
       await c.addOverlay(marker);
       _markers[key] = marker;
     }
-
-    // ✅ 여기서 fitBounds 같은 카메라 자동 변경은 절대 하지 않음
   }
 
   Future<void> _playSelectPopAnimationOptimized() async {
@@ -361,12 +384,11 @@ class MapPageState extends State<MapPage> {
   @override
   Widget build(BuildContext context) {
     final regions = _getAvailableRegions();
-
     final isEmpty = _box.isEmpty;
 
     final topPad = MediaQuery.of(context).padding.top;
-    const headerH = 80.0; // ✅ 상단 제목바 높이
-    const gap = 14.0; // ✅ 제목바-드롭다운 간격
+    const headerH = 80.0;
+    const gap = 14.0;
 
     return Stack(
       children: [
@@ -382,8 +404,6 @@ class MapPageState extends State<MapPage> {
             _controller = controller;
             _currentZoom = _koreaZoom;
             await _syncMarkers();
-
-            // ✅ 첫 진입은 무조건 전국 고정
             await _moveToKorea();
           },
           onCameraChange: (reason, animated) async {
@@ -395,17 +415,17 @@ class MapPageState extends State<MapPage> {
           },
         ),
 
-        // 2) 상단 고정 헤더 (로고 + 제목) - AppBar 느낌
+        // 2) 상단 헤더
         Positioned(
           left: 0,
           right: 0,
           top: 0,
           child: Container(
-            color: Colors.white, // ✅ 상태바까지 흰 배경
+            color: Colors.white,
             child: SafeArea(
               bottom: false,
               child: Container(
-                height: 88, // ✅ 2줄이면 68 추천 (64도 가능)
+                height: 88,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 decoration: const BoxDecoration(
                   border: Border(
@@ -416,7 +436,7 @@ class MapPageState extends State<MapPage> {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Image.asset(
-                      'assets/icons/pin.png', // ✅ 네 핀 이미지 경로
+                      'assets/icons/pin.png',
                       width: 48,
                       height: 48,
                     ),
@@ -453,7 +473,7 @@ class MapPageState extends State<MapPage> {
           ),
         ),
 
-        // ✅ 지역 드롭다운 (헤더 바로 아래 고정)
+        // 3) 지역 드롭다운
         Positioned(
           left: 12,
           right: 12,
@@ -466,17 +486,14 @@ class MapPageState extends State<MapPage> {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
-                  value: regions.contains(_selectedRegion)
-                      ? _selectedRegion
-                      : '전체',
+                  value:
+                      regions.contains(_selectedRegion) ? _selectedRegion : '전체',
                   isExpanded: true,
-
                   icon: const Icon(Icons.keyboard_arrow_down_rounded),
                   items: regions.map((e) {
                     return DropdownMenuItem<String>(
                       value: e,
                       child: Padding(
-                        // ✅ 드롭다운 리스트(펼쳐진 메뉴)에서 한 줄 높이
                         padding: const EdgeInsets.symmetric(vertical: 6),
                         child: Text(e, style: const TextStyle(fontSize: 14)),
                       ),
@@ -509,22 +526,31 @@ class MapPageState extends State<MapPage> {
           ),
         ),
 
-        // 4) 바텀시트
+        // 4) 바텀시트 (배너 높이만큼 위로)
         if (_selectedRestaurant != null)
           Positioned.fill(
             child: Align(
               alignment: Alignment.bottomCenter,
-              child: _RestaurantBottomSheet(
-                restaurant: _selectedRestaurant!,
-                onClose: _clearSelectionOptimized,
-                onDetail: () => _openDetail(_selectedKey, _selectedRestaurant!),
+              child: Padding(
+                padding: EdgeInsets.only(
+                  bottom: (_isBannerLoaded && _bannerAd != null)
+                      ? _bannerAd!.size.height.toDouble()
+                      : 0,
+                ),
+                child: _RestaurantBottomSheet(
+                  restaurant: _selectedRestaurant!,
+                  onClose: _clearSelectionOptimized,
+                  onDetail: () => _openDetail(_selectedKey, _selectedRestaurant!),
+                ),
               ),
             ),
           ),
+
+        // 5) 빈 상태 안내
         if (isEmpty)
           Positioned.fill(
             child: IgnorePointer(
-              ignoring: true, // 지도 터치 막지 않음
+              ignoring: true,
               child: Center(
                 child: Container(
                   margin: const EdgeInsets.symmetric(horizontal: 24),
@@ -555,6 +581,20 @@ class MapPageState extends State<MapPage> {
             ),
           ),
 
+        // ✅ 6) 배너 광고 (지도 아래/화면 맨 아래)
+        if (_isBannerLoaded && _bannerAd != null)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: SafeArea(
+              top: false,
+              child: SizedBox(
+                height: _bannerAd!.size.height.toDouble(),
+                child: AdWidget(ad: _bannerAd!),
+              ),
+            ),
+          ),
       ],
     );
   }

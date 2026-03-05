@@ -5,7 +5,7 @@ import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'models/restaurant.dart';
 import 'pages/home_page.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,6 +22,7 @@ Future<void> main() async {
       debugPrint("NaverMap auth failed: $ex");
     },
   );
+  await MobileAds.instance.initialize();
 
     runApp(const MyApp());
 }
